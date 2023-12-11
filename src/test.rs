@@ -434,7 +434,19 @@ fn inspect() {
         buf.push(v);
         Ok(())
     });
-    it.count().unwrap();
+    assert_eq!(it.collect::<Vec<_>>(), Ok(vec![0, 1, 2, 3]));
+    assert_eq!(buf, vec![0, 1, 2, 3]);
+}
+
+#[test]
+fn update() {
+    let mut buf = vec![];
+    let it = convert(vec![0, 1, 2, 3].into_iter().map(Ok::<i32, ()>)).update(|v| {
+        buf.push(*v);
+        *v += 1;
+        Ok(())
+    });
+    assert_eq!(it.collect::<Vec<_>>(), Ok(vec![1, 2, 3, 4]));
     assert_eq!(buf, vec![0, 1, 2, 3]);
 }
 

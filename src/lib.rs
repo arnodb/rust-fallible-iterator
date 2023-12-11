@@ -423,6 +423,16 @@ pub trait FallibleIterator {
         Inspect { it: self, f }
     }
 
+    /// Returns an iterator which passes each mutable element to a closure before returning it.
+    #[inline]
+    fn update<F>(self, f: F) -> Update<Self, F>
+    where
+        Self: Sized,
+        F: FnMut(&mut Self::Item) -> Result<(), Self::Error>,
+    {
+        Update { it: self, f }
+    }
+
     /// Borrow an iterator rather than consuming it.
     ///
     /// This is useful to allow the use of iterator adaptors that would
@@ -2054,6 +2064,81 @@ where
         let inspect = &mut self.f;
         self.it.try_rfold(init, |acc, v| {
             inspect(&v)?;
+            f(acc, v)
+        })
+    }
+}
+
+/// An iterator which passes each mutable element to a closure before returning it.
+#[derive(Clone, Debug)]
+pub struct Update<I, F> {
+    it: I,
+    f: F,
+}
+
+impl<I, F> FallibleIterator for Update<I, F>
+where
+    I: FallibleIterator,
+    F: FnMut(&mut I::Item) -> Result<(), I::Error>,
+{
+    type Item = I::Item;
+    type Error = I::Error;
+
+    #[inline]
+    fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+        match self.it.next()? {
+            Some(mut i) => {
+                (self.f)(&mut i)?;
+                Ok(Some(i))
+            }
+            None => Ok(None),
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
+    }
+
+    #[inline]
+    fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
+    where
+        E: From<I::Error>,
+        G: FnMut(B, I::Item) -> Result<B, E>,
+    {
+        let update = &mut self.f;
+        self.it.try_fold(init, |acc, mut v| {
+            update(&mut v)?;
+            f(acc, v)
+        })
+    }
+}
+
+impl<I, F> DoubleEndedFallibleIterator for Update<I, F>
+where
+    I: DoubleEndedFallibleIterator,
+    F: FnMut(&mut I::Item) -> Result<(), I::Error>,
+{
+    #[inline]
+    fn next_back(&mut self) -> Result<Option<I::Item>, I::Error> {
+        match self.it.next_back()? {
+            Some(mut i) => {
+                (self.f)(&mut i)?;
+                Ok(Some(i))
+            }
+            None => Ok(None),
+        }
+    }
+
+    #[inline]
+    fn try_rfold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
+    where
+        E: From<I::Error>,
+        G: FnMut(B, I::Item) -> Result<B, E>,
+    {
+        let update = &mut self.f;
+        self.it.try_rfold(init, |acc, mut v| {
+            update(&mut v)?;
             f(acc, v)
         })
     }
